@@ -1,0 +1,1162 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<title>日迹</title>
+<meta name="theme-color" content="#F3EFE6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="日迹">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-180.png">
+<link rel="icon" href="./icons/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<style>
+  /* 主字体：今年也要加油鸭（自托管，字体到位后由 JS 挂上 .wf 再启用） */
+  @font-face{
+    font-family:"JiaYou";font-style:normal;font-weight:400;font-display:swap;
+    src:url("./fonts/Jiayou.ttf") format("truetype");
+  }
+  /* 本机可用的圆体/楷体系，字体未就绪时的兜底 */
+  @font-face{
+    font-family:"Hand";font-style:normal;font-weight:400;font-display:swap;
+    src:local("ZCOOL KuaiLe"),local("YouYuan"),local("幼圆"),local("Yuanti SC"),local("圆体-简"),
+        local("Kaiti SC"),local("STKaiti"),local("KaiTi"),local("楷体"),
+        local("Songti SC"),local("Noto Serif CJK SC"),local("Source Han Serif SC");
+  }
+  :root{
+    --paper:#F7F3EA;
+    --paper-2:#EFE9DC;
+    --paper-rgb:247,243,234;
+    --ink:#241F1B;
+    --ink-rgb:36,31,27;
+    --ink-2:#6E6659;
+    --ink-3:#A79E8E;
+    --line:#DCD4C4;
+    --gold:#B8860B;
+    --gold-2:#F2B705;
+    --hand:"Hand",serif;
+    --ease:cubic-bezier(.22,1,.36,1);
+  }
+  /* 字体就绪后启用（7MB，先出界面再换字） */
+  html.wf{--hand:"JiaYou","Hand",serif}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:var(--hand);
+    font-weight:400;
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100vh;
+    min-height:100dvh;
+    overflow-x:hidden;
+    touch-action:manipulation;
+    letter-spacing:.02em;
+  }
+  /* 纸纹 + 柔光 */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.34' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.72'/%3E%3C/svg%3E");
+    background-size:420px 420px;
+    opacity:.24;mix-blend-mode:multiply;
+  }
+  body::after{
+    content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background:radial-gradient(120% 70% at 50% -10%,rgba(255,252,243,.95),rgba(255,252,243,0) 62%);
+  }
+  .app{
+    position:relative;z-index:1;
+    max-width:520px;margin:0 auto;
+    padding:calc(env(safe-area-inset-top) + 16px) 24px calc(env(safe-area-inset-bottom) + 92px);
+  }
+
+  /* ---------- 顶部 ---------- */
+  .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:26px}
+  .mark{font-size:21px;letter-spacing:.04em;color:var(--ink)}
+  .dotmark{width:8px;height:8px;border-radius:50%;background:var(--ink);opacity:.32;margin-right:4px}
+
+  /* ---------- 日期 ---------- */
+  .datebar{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:30px}
+  .nav-arrow{
+    width:40px;height:40px;padding:0;border:0;background:transparent;
+    color:var(--ink-3);font-size:18px;display:grid;place-items:center;
+  }
+  .nav-arrow:active{color:var(--ink)}
+  .dwrap{text-align:center;flex:0 0 auto;position:relative;padding:0 4px 6px}
+  .dnum{font-size:40px;line-height:1.05;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+  .dnum i{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--ink-3);vertical-align:middle;margin:0 8px 6px;
+    font-style:normal;font-size:0;
+  }
+  .dsub{font-size:13px;color:var(--ink-2);letter-spacing:.12em;margin-top:6px}
+  .dwrap svg.squig{position:absolute;left:0;right:0;bottom:-2px;width:100%;height:6px;color:var(--ink-3);opacity:.7;overflow:visible}
+  .jump{position:absolute;inset:0;opacity:0;border:0;background:transparent;width:100%}
+
+  /* ---------- 九宫格 ---------- */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px 8px;margin-top:6px}
+  .cell{
+    position:relative;border:0;background:transparent;padding:0;
+    display:flex;flex-direction:column;align-items:center;gap:9px;
+    color:var(--ink);font-family:inherit;
+    animation:rise .55s var(--ease) both;animation-delay:calc(var(--i) * 38ms);
+  }
+  @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .chip{
+    width:62px;height:62px;border-radius:50%;
+    background:var(--tint,#E7E1D3);
+    display:grid;place-items:center;
+    color:var(--fg,var(--ink));
+    box-shadow:0 2px 0 rgba(var(--ink-rgb),.06);
+    transition:transform .28s var(--ease),box-shadow .28s var(--ease);
+  }
+  .chip svg{width:28px;height:28px;filter:url(#wob);transform:rotate(var(--rot,0deg))}
+  .cell:active .chip{transform:scale(.93);box-shadow:0 0 0 6px rgba(var(--ink-rgb),.035)}
+  .lb{font-size:13.5px;letter-spacing:.07em;color:var(--lbfg,var(--fg,var(--ink)));opacity:.95}
+  .cnt{
+    position:absolute;top:-2px;
+    left:calc(50% + 16px);
+    min-width:15px;height:15px;padding:0 4px;border-radius:8px;
+    background:var(--fg,var(--ink));color:var(--paper);
+    font-size:9.5px;line-height:15px;letter-spacing:0;
+  }
+  .cell.dk .cnt{background:var(--paper);color:var(--ink)}
+  .hint{    margin-top:34px;text-align:center;font-size:12.5px;color:var(--ink-3);
+    letter-spacing:.14em;transition:opacity .3s;
+  }
+
+  /* ---------- 底部标签 ---------- */
+  .tabs{
+    position:fixed;left:0;right:0;bottom:0;z-index:20;
+    display:flex;justify-content:center;gap:6px;
+    padding:8px 12px calc(env(safe-area-inset-bottom) + 8px);
+    background:linear-gradient(to top,rgba(var(--paper-rgb),.97) 55%,rgba(var(--paper-rgb),0));
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  }
+  .tab{
+    border:0;background:transparent;font-family:inherit;
+    flex:1 1 0;max-width:110px;
+    display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:6px 0;color:var(--ink-3);letter-spacing:.06em;font-size:12px;
+  }
+  .tab svg{width:21px;height:21px;filter:url(#wob)}
+  .tab.on{color:var(--ink)}
+  .tab.on svg{opacity:1}
+
+  /* ---------- 抽屉 ---------- */
+  .scrim{
+    position:fixed;inset:0;z-index:30;background:rgba(40,36,30,.20);
+    opacity:0;pointer-events:none;transition:opacity .3s var(--ease);
+  }
+  .scrim.on{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:31;
+    max-width:520px;margin:0 auto;
+    background:var(--tint,#EFE9DC);
+    color:var(--ink);
+    border-radius:26px 26px 0 0;
+    box-shadow:0 -10px 40px rgba(60,50,35,.14);
+    transform:translateY(102%);
+    transition:transform .38s var(--ease),height .34s var(--ease),border-radius .3s var(--ease);
+    padding:12px 22px calc(env(safe-area-inset-bottom) + 18px);
+    max-height:94dvh;display:flex;flex-direction:column;
+    will-change:transform;
+  }
+  /* 上拖铺满 */
+  .sheet.full{border-radius:20px 20px 0 0;max-height:none}
+  .sheet.full .sbody{flex:1 1 auto;min-height:0}
+  .dragzone{
+    position:absolute;left:0;right:0;top:0;height:62px;z-index:6;
+    touch-action:none;cursor:grab;
+  }
+  .dragzone:active{cursor:grabbing}
+  .sheet::before{
+    content:"";position:absolute;inset:0;border-radius:26px 26px 0 0;pointer-events:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.34' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.72'/%3E%3C/svg%3E");
+    background-size:420px 420px;
+    opacity:.20;mix-blend-mode:multiply;
+  }
+  .sheet.on{transform:translateY(0)}  .grab{width:38px;height:4px;border-radius:2px;background:rgba(var(--ink-rgb),.16);margin:2px auto 14px;flex:0 0 auto}
+  .shead{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;position:relative;z-index:1;gap:12px;min-width:0}
+  .sname{font-size:23px;letter-spacing:.08em}
+  .sdate{font-size:12.5px;color:var(--ink-2);letter-spacing:.06em;white-space:nowrap;flex:0 0 auto}
+  .rail{
+    display:flex;gap:9px;overflow-x:auto;padding:14px 0 12px;margin:0 -22px;
+    padding-left:22px;padding-right:22px;
+    scrollbar-width:none;position:relative;z-index:1;
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 20px),transparent 100%);
+    mask-image:linear-gradient(to right,transparent 0,#000 14px,#000 calc(100% - 20px),transparent 100%);
+  }
+  .rail::-webkit-scrollbar{display:none}
+  .ro{
+    flex:0 0 auto;width:42px;height:42px;border-radius:50%;
+    border:1.2px solid rgba(var(--ink-rgb),.12);background:transparent;color:rgba(var(--ink-rgb),.45);
+    display:grid;place-items:center;padding:0;transition:background .25s,color .25s;
+  }
+  .ro svg{width:20px;height:20px}
+  .ro.on{background:var(--paper);border-color:transparent;color:var(--ink);box-shadow:0 1px 4px rgba(var(--ink-rgb),.06)}
+  .ro.on.dk{background:var(--ink);color:var(--paper)}
+  .sbody{position:relative;z-index:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;flex:0 1 auto;min-height:0}
+
+  .field{position:relative;margin-top:6px;min-width:0}
+  .field input{
+    width:100%;min-width:0;border:0;background:transparent;font-family:inherit;
+    font-size:18px;color:var(--ink);padding:11px 2px 9px;outline:none;
+    letter-spacing:.02em;
+  }
+  .field input::placeholder{color:rgba(var(--ink-rgb),.32)}
+  .uline{display:block;width:100%;height:6px;color:rgba(var(--ink-rgb),.30);overflow:visible}
+  .field.big input{font-size:21px}
+
+  .subrow{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .subrow .field{flex:1 1 0;margin-top:0;min-width:0}
+  .subrow input{font-size:14.5px;padding:8px 2px 7px;color:var(--ink-2)}
+
+  /* 奖杯按钮 */
+  .tw{
+    border:0;background:transparent;padding:4px 2px;
+    display:flex;align-items:center;gap:5px;
+    color:rgba(var(--ink-rgb),.28);font-family:inherit;position:relative;
+  }
+  .tw svg{width:26px;height:26px;display:block;filter:url(#wob)}
+  .tw .twl{display:none;font-size:12px;letter-spacing:.1em;color:var(--gold);white-space:nowrap}
+  .tw.on{color:var(--gold)}
+  .tw.on .twl{display:inline}
+  .tw.on svg{fill:var(--gold-2);stroke:var(--gold);filter:drop-shadow(0 1px 0 rgba(192,143,44,.15))}
+  .tw.pop svg{animation:pop .45s var(--ease)}
+  @keyframes pop{0%{transform:scale(.72)}55%{transform:scale(1.22)}100%{transform:scale(1)}}
+
+  .actions{display:flex;align-items:center;justify-content:center;gap:14px;margin:20px 0 4px}
+  .add{
+    position:relative;border:0;background:transparent;font-family:inherit;
+    font-size:16px;letter-spacing:.14em;color:var(--ink);
+    padding:12px 34px 12px 38px;border-radius:999px;
+  }
+  .add::before{
+    content:"";position:absolute;inset:0;border:1.5px solid rgba(var(--ink-rgb),.55);
+    border-radius:999px;filter:url(#rough);
+  }
+  .add:active::before{background:rgba(var(--ink-rgb),.05)}
+  .add[disabled]{opacity:.35}
+  .quick{display:flex;align-items:center;justify-content:center;gap:9px;margin-top:10px}
+  .qbtn{
+    border:0;background:transparent;font-family:inherit;font-size:12.5px;
+    color:var(--ink-2);letter-spacing:.05em;padding:6px 2px;
+  }
+  .qbtn:active{color:var(--ink)}
+  .qsep{color:var(--ink-3);font-size:11px}
+
+  /* 已完成列表 */
+  .rows{margin:14px -6px 4px;padding:0;list-style:none;border-top:1px dashed rgba(var(--ink-rgb),.14)}
+  .row{display:flex;align-items:center;gap:10px;padding:11px 6px;border-bottom:1px dashed rgba(var(--ink-rgb),.09)}
+  .rtxt{flex:1 1 0;min-width:0}
+  .rn{font-size:15.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rs{font-size:11.5px;color:var(--ink-2);opacity:.8;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .del{border:0;background:transparent;color:rgba(var(--ink-rgb),.22);padding:6px 2px;font-size:14px;font-family:inherit}
+  .empty{font-size:12.5px;color:rgba(var(--ink-rgb),.38);text-align:center;padding:16px 0 4px;letter-spacing:.1em}
+
+  /* 手游选择 */
+  .segs{display:flex;gap:16px;margin:2px 0 12px}
+  .seg{border:0;background:transparent;font-family:inherit;font-size:15px;color:rgba(var(--ink-rgb),.35);padding:4px 0;position:relative;letter-spacing:.1em}
+  .seg.on{color:var(--ink)}
+  .seg.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1.6px;background:var(--ink);border-radius:2px;filter:url(#rough)}
+  .games{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .gp{
+    border:1.2px solid rgba(var(--ink-rgb),.22);background:transparent;font-family:inherit;
+    font-size:13.5px;color:var(--ink);padding:7px 13px;border-radius:999px;letter-spacing:.04em;
+  }
+  .gp.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .gp.plus{border-style:dashed;color:var(--ink-2)}
+  .gsec-title{font-size:12px;color:var(--ink-2);letter-spacing:.16em;margin:14px 0 2px}
+
+  /* ---------- 日历 ---------- */
+  .view[hidden]{display:none}
+  .calhead{display:flex;align-items:center;justify-content:center;gap:20px;margin:2px 0 22px}
+  .calm{font-size:20px;letter-spacing:.14em}
+  .calm i{font-style:normal;font-size:13px;color:var(--ink-2);margin-right:4px}
+  .dowgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:0;margin-bottom:6px}
+  .dow{text-align:center;font-size:11px;color:var(--ink-3);letter-spacing:.1em;padding-bottom:6px}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);row-gap:2px}
+  .day{
+    border:0;background:transparent;font-family:inherit;
+    aspect-ratio:1/1.12;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:4px;color:var(--ink);position:relative;padding:0;border-radius:14px;
+  }
+  .day.out{color:rgba(var(--ink-rgb),.2)}
+  .day .dn{font-size:14.5px;font-variant-numeric:tabular-nums;line-height:1}
+  .day.today .dn{text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1.4px}
+  .day.sel{position:relative}
+  .day.sel::after{
+    content:"";position:absolute;inset:4px 6px;pointer-events:none;
+    border:1.4px solid rgba(var(--ink-rgb),.45);border-radius:13px;
+    filter:url(#rough2);
+  }
+  .day.sel.today .dn{text-decoration-color:rgba(var(--ink-rgb),.4)}
+  .dots{display:flex;gap:3px;height:5px;align-items:center}
+  .dot{width:5px;height:5px;border-radius:50%;background:var(--c,#C9C2B2)}
+  .day.win .dn{color:var(--gold)}
+  .day.sel.win .dn{color:var(--gold-2)}
+  .calstat{text-align:center;font-size:12.5px;color:var(--ink-2);letter-spacing:.12em;margin:18px 0 6px}
+  .daypanel{margin-top:14px;border-top:1px dashed rgba(var(--ink-rgb),.14);padding-top:12px}
+  .dp-head{font-size:13px;color:var(--ink-2);letter-spacing:.14em;margin-bottom:6px}
+  .dp-cat{display:flex;align-items:center;gap:7px;margin:14px 0 2px;font-size:11.5px;color:var(--ink-2);letter-spacing:.14em}
+  .dp-cat svg{width:15px;height:15px}
+  .dp-cat::after{content:"";flex:1;height:1px;background:rgba(var(--ink-rgb),.08);margin-left:6px}
+
+  /* ---------- 时间轴 ---------- */
+  .tgroup{margin-bottom:26px}
+  .tdate{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+  .td-n{font-size:19px;letter-spacing:.06em}
+  .td-w{font-size:11.5px;color:var(--ink-3);letter-spacing:.18em}
+  .trow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed rgba(var(--ink-rgb),.07)}
+  .trow .ic{width:26px;height:26px;border-radius:50%;background:var(--tint);display:grid;place-items:center;flex:0 0 auto;color:var(--fg,var(--ink))}
+  .trow .ic svg{width:14px;height:14px}
+  .trow .txt{flex:1 1 auto;min-width:0}
+  .trow .n{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .trow .s{font-size:11.5px;color:var(--ink-2);opacity:.75;margin-top:2px}
+  .done-badge{display:flex;align-items:center;gap:3px;color:var(--gold);font-size:11px;letter-spacing:.08em;flex:0 0 auto}
+  .done-badge svg{width:19px;height:19px;fill:var(--gold-2);stroke:var(--gold);filter:url(#wob)}
+
+  /* ---------- 设置 ---------- */
+  .set-sec{margin-bottom:28px}
+  .set-t{font-size:12px;color:var(--ink-3);letter-spacing:.2em;margin-bottom:10px}
+  .set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-bottom:1px solid rgba(var(--ink-rgb),.07);font-size:15px}
+  .set-row small{display:block;font-size:11.5px;color:var(--ink-3);letter-spacing:.04em;margin-top:3px}
+  .btn-line{
+    border:0;background:transparent;font-family:inherit;font-size:14px;color:var(--ink);
+    padding:5px 0;letter-spacing:.1em;text-decoration:underline;text-underline-offset:4px;
+    text-decoration-thickness:1px;text-decoration-color:rgba(var(--ink-rgb),.22);
+  }
+  .shape-pick{display:flex;gap:16px}
+  .sp{border:0;background:transparent;padding:4px;color:rgba(var(--ink-rgb),.22);display:grid;place-items:center}
+  .sp svg{width:30px;height:30px;filter:url(#wob)}
+  .sp.on{color:var(--gold-2)}
+  .chipset{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .cs{display:flex;align-items:center;gap:6px;border:1px solid rgba(var(--ink-rgb),.16);border-radius:999px;padding:6px 8px 6px 12px;font-size:13px}
+  .cs button{border:0;background:transparent;color:var(--ink-3);padding:0 2px;font-size:13px;font-family:inherit}
+  .note{font-size:11.5px;color:var(--ink-3);line-height:1.9;letter-spacing:.04em}
+  .hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="rough" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018 0.028" numOctaves="2" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="wob" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.032 0.045" numOctaves="2" seed="11" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="1.05" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="rough2" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.05 0.04" numOctaves="2" seed="3" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="1.5" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<div class="app">
+  <header class="hd">
+    <div class="mark">日迹.</div>
+    <span class="dotmark" aria-hidden="true"></span>
+  </header>
+
+  <main id="view-home" class="view">
+    <div class="datebar">
+      <button class="nav-arrow" id="prevDay" aria-label="前一天">‹</button>
+      <div class="dwrap">
+        <div class="dnum" id="dnum"></div>
+        <div class="dsub" id="dsub"></div>
+        <svg class="squig" viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M1 4.2 C 20 2.4, 38 4.8, 55 3.2 S 84 2.2, 99 3.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <input class="jump" type="date" id="datePick" aria-label="选择日期">
+      </div>
+      <button class="nav-arrow" id="nextDay" aria-label="后一天">›</button>
+    </div>
+
+    <nav class="grid" id="grid"></nav>
+    <p class="hint" id="hint">点一个图标，记一句。</p>
+  </main>
+
+  <main id="view-cal" class="view" hidden>
+    <div class="calhead">
+      <button class="nav-arrow" id="calPrev" aria-label="上个月">‹</button>
+      <div class="calm" id="calm"></div>
+      <button class="nav-arrow" id="calNext" aria-label="下个月">›</button>
+    </div>
+    <div class="dowgrid" id="dowgrid"></div>
+    <div class="days" id="days"></div>
+    <p class="calstat" id="calstat"></p>
+    <section class="daypanel" id="daypanel"></section>
+  </main>
+
+  <main id="view-line" class="view" hidden>
+    <div id="lineBody"></div>
+  </main>
+
+  <main id="view-set" class="view" hidden>
+    <div class="set-sec">
+      <div class="set-t">完成的记号</div>
+      <div class="set-row">
+        <div>奖杯样式<small>点亮的那个小图</small></div>
+        <div class="shape-pick" id="shapePick"></div>
+      </div>
+    </div>
+    <div class="set-sec">
+      <div class="set-t">常玩的手游</div>
+      <div class="chipset" id="gameChips"></div>
+      <div class="field" style="margin-top:14px">
+        <input id="gameNew" placeholder="＋ 添加一个游戏">
+        <svg class="uline" viewBox="0 0 100 6" preserveAspectRatio="none"><path d="M1 3 C 22 1.6, 45 4.2, 68 2.6 S 88 2.2, 99 3.4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+    <div class="set-sec">
+      <div class="set-t">备份</div>
+      <div class="set-row"><div>导出备份<small>换手机、清缓存前导一次</small></div><button class="btn-line" id="expJson">导出</button></div>
+      <div class="set-row"><div>导入备份<small>从 .json 恢复</small></div><button class="btn-line" id="impJson">导入</button></div>
+      <div class="set-row"><div>导出表格<small>CSV，可导入多维表</small></div><button class="btn-line" id="expCsv">导出</button></div>
+      <input type="file" id="fileIn" accept="application/json,.json" class="hidden">
+    </div>
+    <div class="set-sec">
+      <div class="set-t">说明</div>
+      <p class="note">
+        数据只存在这台手机的浏览器里，不上传。<br>
+        建议用「添加到主屏幕」的方式打开，存储更稳。<br>
+        换设备时先导出备份，再在新设备导入。
+      </p>
+    </div>
+  </main>
+</div>
+
+<nav class="tabs" id="tabs">
+  <button class="tab on" data-view="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.2 10.4 12 3.8l7.8 6.6V19a1.6 1.6 0 0 1-1.6 1.6H5.8A1.6 1.6 0 0 1 4.2 19z"/><path d="M9.6 20.6v-6.2h4.8v6.2"/></svg>今日</button>
+  <button class="tab" data-view="cal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3.4" y="5.4" width="17.2" height="15.2" rx="2.4"/><path d="M3.6 10h16.8M8.2 3.4v3.6M15.8 3.4v3.6"/></svg>日历</button>
+  <button class="tab" data-view="line"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.4v15.2M9.4 7.6h9.4M9.4 12h9.4M9.4 16.4h6.4"/></svg>时间轴</button>
+  <button class="tab" data-view="set"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5.6" cy="12" r="1.35"/><circle cx="12" cy="12" r="1.35"/><circle cx="18.4" cy="12" r="1.35"/></svg>设置</button>
+</nav>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sname">
+  <div class="dragzone" id="dragzone" aria-label="拖动抽屉"></div>
+  <div class="grab"></div>
+  <div class="shead">
+    <div class="sname" id="sname"></div>
+    <div class="sdate" id="sdate"></div>
+  </div>
+  <div class="rail" id="rail"></div>
+  <div class="sbody">
+    <div id="gameBox" hidden>
+      <div class="segs">
+        <button class="seg on" data-variant="solo">单机</button>
+        <button class="seg" data-variant="mobile">常玩</button>
+      </div>
+      <div id="gamesWrap" hidden>
+        <div class="gsec-title">选一个常玩的</div>
+        <div class="games" id="gamePicks"></div>
+      </div>
+    </div>
+
+    <div class="field big" id="titleField">
+      <input id="titleIn" placeholder="写点什么…" autocomplete="off" enterkeyhint="done">
+      <svg class="uline" viewBox="0 0 100 6" preserveAspectRatio="none"><path d="M1 3.4 C 18 1.4, 40 4.6, 62 2.4 S 86 2.2, 99 3.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </div>
+
+    <div class="subrow">
+      <div class="field" style="flex:1 1 auto;margin-top:0">
+        <input id="subIn" placeholder="+ 详情" autocomplete="off" enterkeyhint="done">
+        <svg class="uline" viewBox="0 0 100 6" preserveAspectRatio="none"><path d="M1 3.2 C 25 1.8, 48 4.2, 70 2.6 S 88 2.4, 99 3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+      </div>
+      <button class="tw" id="twBtn" type="button" aria-label="标记完成"><span class="twl" id="twLabel"></span><span id="twIcon"></span></button>
+    </div>
+
+    <div class="actions">
+      <button class="add" id="addBtn" type="button">记下</button>
+    </div>
+    <div class="quick" id="quick">
+      <button class="qbtn" id="againBtn" type="button">＋ 再来一项</button>
+      <span class="qsep">·</span>
+      <button class="qbtn" id="nextCatBtn" type="button">换一类 ▸</button>
+    </div>
+
+    <ul class="rows" id="rows"></ul>
+  </div>
+</section>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ================= 配置 ================= */
+  const CATS = [
+    {id:"game",     name:"游戏",  tint:"#9FE0BE", soft:"#C9EEDC", fg:"#0B4A32", sub:"平台 / 版本",   word:"已通关", trophy:true },
+    {id:"tv",       name:"影视",  tint:"#93C9FF", soft:"#C4E2FF", fg:"#0D3562", sub:"季数 / 平台",   word:"已看完", trophy:true },
+    {id:"movie",    name:"电影",  tint:"#C0A4FF", soft:"#DCCBFF", fg:"#331A6E", sub:"年份 / 影院",   word:"已看完", trophy:true },
+    {id:"book",     name:"书籍",  tint:"#FFD35C", soft:"#FFE9A8", fg:"#593B00", sub:"作者",         word:"已读完", trophy:true },
+    {id:"podcast",  name:"播客",  tint:"#7FDEDA", soft:"#BFEFED", fg:"#04504F", sub:"节目 / 期数",   word:"已听完", trophy:true },
+    {id:"music",    name:"音乐",  tint:"#FFAFC6", soft:"#FFD3DF", fg:"#6C1230", sub:"歌手 / 专辑",   word:"",      trophy:false},
+    {id:"activity", name:"活动",  tint:"#FFC08A", soft:"#FFDCBE", fg:"#5E2B00", sub:"地点",         word:"",      trophy:false},
+    {id:"social",   name:"社交",  tint:"#D8F272", soft:"#EBF8B8", fg:"#3E4A00", sub:"和谁",         word:"",      trophy:false},
+    {id:"event",    name:"大事件",tint:"#1B1B1F", soft:"#2A2A31", fg:"#F7F3EA", sub:"影响",         word:"",      trophy:false, dark:true}
+  ];
+  const CAT = Object.fromEntries(CATS.map(c=>[c.id,c]));
+  const WK = ["日","一","二","三","四","五","六"];
+
+  /* ================= 手绘图标 ================= */
+  const SVG = (p,extra)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round" ${extra||""}>${p}</svg>`;
+  const ICON = {
+    game: SVG('<path d="M7.2 8.7c-2.1-.1-3.8 1.7-3.8 3.7 0 2.3 1.5 4.3 3.3 4.3 1.2 0 1.9-.7 2.7-1.8.4-.5 1-.8 1.6-.8h2.1c.6 0 1.2.3 1.6.8.8 1.1 1.5 1.8 2.7 1.8 1.8 0 3.3-2 3.3-4.3 0-2-1.6-3.8-3.7-3.7z"/><path d="M7.6 11.4v3.6M5.9 13.2h3.5"/><circle cx="15.6" cy="12.3" r=".85"/><circle cx="17.5" cy="14.2" r=".85"/>'),
+    tv: SVG('<path d="M3.8 8.6c-.7 0-1.2.5-1.2 1.1v8.5c0 .6.5 1.1 1.2 1.1h16.4c.7 0 1.2-.5 1.2-1.1V9.7c0-.6-.5-1.1-1.2-1.1z"/><path d="M8.9 8.4 6.4 5M15.1 8.5l2.5-3.4"/><path d="M10.6 11.9v4l3.7-2z" stroke-width="1.4"/>'),
+    movie: SVG('<path d="M3.5 10h17.1v8.2c0 .6-.5 1.1-1.1 1.1H4.6c-.6 0-1.1-.5-1.1-1.1z"/><path d="M4 9.9 5.7 4.9c.2-.6.8-.9 1.4-.7l12.8 3.6c.6.2.9.8.7 1.4l-.4 1"/><path d="M8.4 5.2 6.9 9.3M13.1 6.5l-1.5 3.5M17.8 7.8l-1.5 3.4"/>'),
+    book: SVG('<path d="M12 7.5C9.9 6 7.6 5.6 5 6c-.6.1-1 .6-1 1.2v9c0 .7.7 1.2 1.3 1 2.3-.6 4.5-.2 6.7 1.1 2.2-1.3 4.4-1.7 6.7-1.1.6.2 1.3-.3 1.3-1v-9c0-.6-.4-1.1-1-1.2-2.6-.4-4.9 0-7 1.5z"/><path d="M12 7.6v11"/>'),
+    podcast: SVG('<path d="M4.8 15.1v-2.2c0-4 3.2-7.2 7.2-7.2s7.2 3.2 7.2 7.2v2.2"/><path d="M6.9 14.3c.7 0 1.3.6 1.3 1.3v3c0 .7-.6 1.3-1.3 1.3s-1.3-.6-1.3-1.3v-3c0-.7.6-1.3 1.3-1.3z"/><path d="M17.1 14.3c.7 0 1.3.6 1.3 1.3v3c0 .7-.6 1.3-1.3 1.3s-1.3-.6-1.3-1.3v-3c0-.7.6-1.3 1.3-1.3z"/>'),
+    music: SVG('<path d="M9.6 16.4V6.6l7.7-2.1v10"/><ellipse cx="7.6" cy="17.2" rx="2" ry="1.7"/><ellipse cx="15.3" cy="15.3" rx="2" ry="1.7"/>'),
+    activity: SVG('<path d="M5.1 8.8h13.8c.6 0 1.1.5 1.1 1.1v1.3c-.8.1-1.4.8-1.4 1.6s.6 1.5 1.4 1.6v1.3c0 .6-.5 1.1-1.1 1.1H5.1c-.6 0-1.1-.5-1.1-1.1v-1.3c.8-.1 1.4-.8 1.4-1.6s-.6-1.5-1.4-1.6V9.9c0-.6.5-1.1 1.1-1.1z"/><path d="M14.4 9.4v1.5M14.4 12.8v1.5M14.4 16.1v1.3" stroke-width="1.35"/>'),
+    social: SVG('<circle cx="8.7" cy="8.7" r="2.6"/><path d="M3.7 19.3c0-2.8 2.2-4.9 5-4.9s5 2.1 5 4.9"/><circle cx="16.5" cy="9.9" r="2"/><path d="M14.9 18.7c.1-2.2 1.4-3.8 3.4-3.8 1.4 0 2.6.9 3.1 2.4"/>'),
+    event: SVG('<path d="M13.5 3.4 7.1 13.2h4.4l-.9 7.4 6.6-10.2h-4.5z"/>')
+  };
+  const TROPHY = {
+    cup: '<path d="M7.4 4.4h9.2v4.3a4.6 4.6 0 0 1-9.2 0z"/><path d="M7.4 5.9H6.2a2 2 0 0 0 0 4h1.2"/><path d="M16.6 5.9h1.2a2 2 0 0 1 0 4h-1.2"/><path d="M12 12.6v2.6"/><path d="M9.7 19.7h4.6"/><path d="M10.1 15.3h3.8l.8 4.4h-5.4z"/>',
+    medal: '<circle cx="12" cy="9.1" r="3.8"/><path d="M9.9 12.4 8 20.1l4-2.4 4 2.4-1.9-7.7"/><path d="M10.3 9.4l1.2 1.2 2.2-2.4"/>',
+    flower: '<circle cx="12" cy="6.5" r="2.85"/><circle cx="17" cy="10.1" r="2.85"/><circle cx="15" cy="17.4" r="2.85"/><circle cx="9" cy="17.4" r="2.85"/><circle cx="7" cy="10.1" r="2.85"/><circle cx="12" cy="12.3" r="1.9"/>'
+  };
+  /* 点亮状态用实心剪影，小尺寸下更清楚 */
+  const TROPHY_SOLID = {
+    cup: '<path d="M7.3 4.3h9.4v4.4a4.7 4.7 0 0 1-9.4 0z"/><path d="M7.3 5.7H6.2a2.1 2.1 0 0 0 0 4.2h1.1V8.3h-.6a.5.5 0 0 1 0-1h.6z"/><path d="M16.7 5.7h1.1a2.1 2.1 0 0 1 0 4.2h-1.1V8.3h.6a.5.5 0 0 0 0-1h-.6z"/><path d="M10.4 12.5h3.2l.8 5.2H9.6z"/><rect x="8.5" y="18" width="7" height="1.9" rx=".85"/>',
+    medal: '<circle cx="12" cy="9.1" r="4.2"/><path d="M9.7 12.3 7.9 20.3h2.6l1.5-5.2 1.5 5.2h2.6l-1.8-8z"/>',
+    flower: '<circle cx="12" cy="6.5" r="2.9"/><circle cx="17.1" cy="10.2" r="2.9"/><circle cx="15.1" cy="17.6" r="2.9"/><circle cx="8.9" cy="17.6" r="2.9"/><circle cx="6.9" cy="10.2" r="2.9"/><circle cx="12" cy="12.3" r="2.1"/>'
+  };
+
+  /* ================= 存储 ================= */
+  const KEY = "riji.v1";
+  const DEMO = new URLSearchParams(location.search).has("demo");
+  let DB = { entries:[], games:["原神","崩坏：星穹铁道","明日方舟","王者荣耀","蛋仔派对"], trophy:"cup" };
+
+  function load(){
+    if(DEMO) return;
+    try{
+      const raw = localStorage.getItem(KEY);
+      if(raw){
+        const o = JSON.parse(raw);
+        DB.entries = Array.isArray(o.entries)?o.entries:[];
+        DB.games = Array.isArray(o.games)&&o.games.length?o.games:DB.games;
+        DB.trophy = o.trophy||"cup";
+      }
+    }catch(e){ console.warn("读取失败",e); }
+  }
+  function save(){
+    if(DEMO) return;
+    try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
+    catch(e){ console.warn("保存失败",e); }
+  }
+
+  /* ================= 日期工具 ================= */
+  const pad = n=>String(n).padStart(2,"0");
+  const key = d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const parse = s=>{ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); };
+  const today = ()=>key(new Date());
+  function shift(s,n){ const d=parse(s); d.setDate(d.getDate()+n); return key(d); }
+  function label(s){
+    const d=parse(s), t=today();
+    if(s===t) return "今天";
+    if(s===shift(t,-1)) return "昨天";
+    if(s===shift(t,1)) return "明天";
+    return d.getFullYear()===new Date().getFullYear() ? `${d.getMonth()+1}月` : `${d.getFullYear()}年`;
+  }
+  const onDate = s=>DB.entries.filter(e=>e.date===s);
+  const uid = ()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+  /* ================= 状态 ================= */
+  const S = {
+    date: today(),
+    view: "home",
+    cat: "tv",
+    variant: "solo",
+    game: null,
+    trophyOn: false,
+    calY: new Date().getFullYear(),
+    calM: new Date().getMonth(),
+    selDate: today()
+  };
+
+  /* ================= DOM ================= */
+  const $ = s=>document.querySelector(s);
+  const el = {
+    dnum:$("#dnum"), dsub:$("#dsub"), datePick:$("#datePick"),
+    grid:$("#grid"), hint:$("#hint"),
+    sheet:$("#sheet"), scrim:$("#scrim"), sname:$("#sname"), sdate:$("#sdate"), rail:$("#rail"), dragzone:$("#dragzone"),
+    rows:$("#rows"), titleIn:$("#titleIn"), subIn:$("#subIn"), addBtn:$("#addBtn"), againBtn:$("#againBtn"), quick:$("#quick"), nextCatBtn:$("#nextCatBtn"),
+    twBtn:$("#twBtn"), twIcon:$("#twIcon"), twLabel:$("#twLabel"), titleField:$("#titleField"),
+    gameBox:$("#gameBox"), gamesWrap:$("#gamesWrap"), gamePicks:$("#gamePicks"),
+    calm:$("#calm"), dowgrid:$("#dowgrid"), days:$("#days"), calstat:$("#calstat"), daypanel:$("#daypanel"),
+    lineBody:$("#lineBody"), shapePick:$("#shapePick"), gameChips:$("#gameChips"),
+    tabs:$("#tabs")
+  };
+
+  /* ================= 首页 ================= */
+  function renderDate(){
+    const d = parse(S.date);
+    el.dnum.innerHTML = `${d.getMonth()+1}<i>·</i>${pad(d.getDate())}`;
+    el.dsub.textContent = `周${WK[d.getDay()]} · ${label(S.date)}`;
+    el.datePick.value = S.date;
+  }
+
+  function renderGrid(){
+    const list = onDate(S.date);
+    el.grid.innerHTML = CATS.map((c,i)=>{
+      const n = list.filter(e=>e.cat===c.id).length;
+      return `<button class="cell${c.dark?" dk":""}" data-cat="${c.id}" style="--i:${i};--tint:${c.tint};--fg:${c.fg};--lbfg:${c.dark?"var(--ink)":c.fg};--rot:${[-1.6,-0.9,1.4,1.1,-1.3,0.8,-1.1,1.5,-0.7][i]}deg">
+        <span class="chip">${ICON[c.id]}</span>
+        <span class="lb">${c.name}</span>
+        ${n?`<span class="cnt">${n}</span>`:""}
+      </button>`;
+    }).join("");
+    const total = list.length;
+    const won = list.filter(e=>e.done).length;
+    el.hint.textContent = total
+      ? `这天记了 ${total} 件${won?`，点亮 ${won} 个`:""}`
+      : "点一个图标，记一句。";
+  }
+
+  /* ================= 抽屉 ================= */
+  function hexRGB(h){
+    h = String(h).replace("#","");
+    if(h.length===3) h = h.split("").map(c=>c+c).join("");
+    const n = parseInt(h,16);
+    return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
+  }
+  function paintSheet(c){
+    const rgb = hexRGB(c.fg), s = el.sheet.style;
+    s.setProperty("--tint", c.soft);
+    s.setProperty("--ink", c.fg);
+    s.setProperty("--ink-rgb", rgb);
+    s.setProperty("--ink-2", `rgba(${rgb},.74)`);
+    s.setProperty("--ink-3", `rgba(${rgb},.48)`);
+    s.setProperty("--line", `rgba(${rgb},.20)`);
+  }
+  function openSheet(cat){
+    S.cat = cat;
+    S.variant = "solo";
+    S.game = null;
+    S.trophyOn = false;
+    paintSheet(CAT[cat]);
+    el.sname.textContent = CAT[cat].name;
+    el.sdate.textContent = `${parse(S.date).getMonth()+1}月${parse(S.date).getDate()}日 · ${label(S.date)}`;
+    el.sheet.classList.remove("full");
+    el.sheet.style.height = "";
+    el.sheet.classList.add("on");
+    el.scrim.classList.add("on");
+    el.scrim.style.opacity = "";
+    document.body.style.overflow = "hidden";
+    renderRail(); renderSheetBody(); renderRows();
+    el.addBtn.textContent = "记下";
+    setTimeout(()=>{ if(cat!=="game") el.titleIn.focus(); },340);
+  }
+  function closeSheet(){
+    el.sheet.classList.remove("on");
+    el.sheet.classList.remove("full");
+    el.scrim.classList.remove("on");
+    el.scrim.style.opacity = "";
+    document.body.style.overflow = "";
+    setTimeout(()=>{ if(!el.sheet.classList.contains("on")) el.sheet.style.height = ""; }, 420);
+  }
+
+  /* ---------- 抽屉拖拽：半开 ⇄ 铺满，下拖收起 ---------- */
+  const DRAG = { on:false, y0:0, h0:0, dy:0 };
+  const fullH = ()=> Math.round(Math.min(window.innerHeight * 0.94, window.innerHeight - 8));
+
+  function setFull(on){
+    el.sheet.classList.toggle("full", on);
+    el.sheet.style.transition = "height .34s var(--ease), border-radius .3s var(--ease)";
+    if(on){
+      el.sheet.style.height = fullH() + "px";
+    }else{
+      el.sheet.style.height = "";
+      setTimeout(()=>{ if(!el.sheet.classList.contains("full") && !DRAG.on) el.sheet.style.height = ""; }, 360);
+    }
+  }
+
+  el.dragzone.addEventListener("pointerdown", e=>{
+    if(!el.sheet.classList.contains("on")) return;
+    DRAG.on = true;
+    DRAG.y0 = e.clientY;
+    DRAG.h0 = el.sheet.getBoundingClientRect().height;
+    DRAG.dy = 0;
+    el.sheet.style.transition = "none";
+    try{ el.dragzone.setPointerCapture(e.pointerId); }catch(_){}
+    e.preventDefault();
+  });
+
+  el.dragzone.addEventListener("pointermove", e=>{
+    if(!DRAG.on) return;
+    DRAG.dy = e.clientY - DRAG.y0;
+    let h = DRAG.h0 - DRAG.dy;
+    h = Math.max(150, Math.min(fullH(), h));
+    el.sheet.style.height = h + "px";
+    if(DRAG.dy > 0) el.scrim.style.opacity = String(Math.max(0, 1 - DRAG.dy / 260));
+    e.preventDefault();
+  });
+
+  function endDrag(){
+    if(!DRAG.on) return;
+    const dy = DRAG.dy;
+    DRAG.on = false;
+    el.sheet.style.transition = "";
+    el.scrim.style.opacity = "";
+    if(dy > 80){ closeSheet(); return; }
+    if(dy < -60){ setFull(true); return; }
+    setFull(el.sheet.classList.contains("full"));
+  }
+  el.dragzone.addEventListener("pointerup", endDrag);
+  el.dragzone.addEventListener("pointercancel", endDrag);
+
+  function renderRail(){
+    el.rail.innerHTML = CATS.map(c=>{
+      const on = c.id===S.cat;
+      const dk = c.dark? " dk":"";
+      const col = on ? (c.dark?"":"") : "";
+      return `<button class="ro${on?" on":""}${dk}" data-cat="${c.id}" aria-label="${c.name}">${ICON[c.id]}</button>`;
+    }).join("");
+  }
+
+  function renderSheetBody(){
+    const c = CAT[S.cat];
+    const isGame = c.id==="game";
+    el.gameBox.hidden = !isGame;
+    if(isGame){
+      el.gamesWrap.hidden = S.variant!=="mobile";
+      el.titleField.querySelector("input").placeholder = S.variant==="mobile" ? "哪个游戏…" : "游戏名…";
+      el.subIn.placeholder = S.variant==="mobile" ? "今天玩了什么" : "+ "+c.sub;
+      renderGamePicks();
+    }else{
+      el.titleIn.placeholder = "写点什么…";
+      el.subIn.placeholder = "+ "+c.sub;
+    }
+    // 奖杯：仅特定分类，且手游条目不给
+    const show = c.trophy && !(isGame && S.variant==="mobile");
+    el.twBtn.style.display = show ? "" : "none";
+    el.twLabel.textContent = c.word;
+    paintTrophy();
+  }
+
+  function renderGamePicks(){
+    el.gamePicks.innerHTML = DB.games.map(g=>
+      `<button class="gp${S.game===g?" on":""}" data-g="${g}">${g}</button>`
+    ).join("") + `<button class="gp plus" data-g="__new">＋ 新游戏</button>`;
+  }
+
+  function paintTrophy(){
+    const on = S.trophyOn && CAT[S.cat].trophy && !(S.cat==="game" && S.variant==="mobile");
+    const set = on ? TROPHY_SOLID : TROPHY;
+    el.twIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${set[DB.trophy]||set.cup}</svg>`;
+    el.twBtn.classList.toggle("on", on);
+  }
+
+  function renderRows(){
+    const list = onDate(S.date).filter(e=>e.cat===S.cat);
+    if(!list.length){
+      el.rows.innerHTML = `<li class="empty">这天空着</li>`;
+      return;
+    }
+    el.rows.innerHTML = list.map(e=>{
+      const c = CAT[e.cat];
+      const done = e.done && c.trophy;
+      const badge = done
+        ? `<span class="done-badge">${badgeSvg()}<span>${c.word}</span></span>`
+        : `<button class="tw" data-toggle="${e.id}" aria-label="标记完成"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${TROPHY[DB.trophy]||TROPHY.cup}</svg></button>`;
+      return `<li class="row">
+        <div class="rtxt"><div class="rn">${esc(e.title)}</div>${e.sub?`<div class="rs">${esc(e.sub)}</div>`:""}</div>
+        ${c.trophy?badge:""}
+        <button class="del" data-del="${e.id}" aria-label="删除">✕</button>
+      </li>`;
+    }).join("");
+  }
+  const badgeSvg = ()=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${TROPHY_SOLID[DB.trophy]||TROPHY_SOLID.cup}</svg>`;
+  const esc = s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+
+  /* ================= 新增 ================= */
+  function addEntry(){
+    const c = CAT[S.cat];
+    let title = el.titleIn.value.trim();
+    let sub = el.subIn.value.trim();
+    if(c.id==="game" && S.variant==="mobile"){
+      if(!S.game){ flash(el.gamePicks); return; }
+      title = S.game;
+      sub = el.subIn.value.trim();
+    }
+    if(!title){ el.titleIn.focus(); return; }
+    const done = S.trophyOn && c.trophy && !(c.id==="game" && S.variant==="mobile");
+    DB.entries.push({
+      id: uid(), date: S.date, cat: c.id, title, sub,
+      variant: c.id==="game"?S.variant:null,
+      done, doneAt: done?Date.now():null
+    });
+    save();
+    el.titleIn.value = ""; el.subIn.value = "";
+    S.trophyOn = false;
+    paintTrophy();
+    if(c.id==="game" && S.variant==="mobile"){ /* 保留游戏选择 */ }
+    renderRows(); renderGrid();
+    el.addBtn.textContent = "记下";
+    if(!(c.id==="game" && S.variant==="mobile")) el.titleIn.focus();
+    if(navigator.vibrate) navigator.vibrate(8);
+  }
+
+  function flash(node){
+    node.animate([{transform:"translateX(0)"},{transform:"translateX(-4px)"},{transform:"translateX(4px)"},{transform:"translateX(0)"}],{duration:280});
+  }
+
+  function toggleDone(id, btn){
+    const e = DB.entries.find(x=>x.id===id);
+    if(!e) return;
+    e.done = !e.done;
+    e.doneAt = e.done?Date.now():null;
+    save();
+    if(e.done && btn){
+      btn.classList.add("on","pop");
+      if(navigator.vibrate) navigator.vibrate([6,20,10]);
+      setTimeout(()=>{ renderRows(); renderGrid(); }, 420);
+    }else{
+      renderRows(); renderGrid();
+    }
+  }
+
+  /* ================= 切换分类（快捷） ================= */
+  function switchCat(cat){
+    S.cat = cat;
+    S.variant = "solo";
+    S.game = null;
+    S.trophyOn = false;
+    paintSheet(CAT[cat]);
+    el.sname.textContent = CAT[cat].name;
+    el.titleIn.value = ""; el.subIn.value = "";
+    el.twBtn.classList.remove("on");
+    renderRail(); renderSheetBody(); renderRows();
+    if(cat!=="game") el.titleIn.focus();
+  }
+
+  /* ================= 日历 ================= */
+  function renderCal(){
+    const y=S.calY, m=S.calM;
+    el.calm.innerHTML = `<i>${y}</i>${m+1}月`;
+    el.dowgrid.innerHTML = ["一","二","三","四","五","六","日"].map(t=>`<div class="dow">${t}</div>`).join("");
+    const first = new Date(y,m,1);
+    let start = first.getDay(); // 0 日
+    start = (start+6)%7; // 以周一为首
+    const dim = new Date(y,m+1,0).getDate();
+    const prevDim = new Date(y,m,0).getDate();
+    let cells = [];
+    for(let i=start-1;i>=0;i--) cells.push({d:prevDim-i,m:-1});
+    for(let i=1;i<=dim;i++) cells.push({d:i,m:0});
+    while(cells.length%7!==0) cells.push({d:cells.length-dim-start+1,m:1});
+    const t = today();
+    el.days.innerHTML = cells.map(c=>{
+      if(c.m!==0){
+        return `<button class="day out" disabled><span class="dn">${c.d}</span><span class="dots"></span></button>`;
+      }
+      const ds = `${y}-${pad(m+1)}-${pad(c.d)}`;
+      const list = onDate(ds);
+      const won = list.some(e=>e.done);
+      const dots = list.slice(0,3).map(e=>`<span class="dot" style="--c:${CAT[e.cat].dark?"#4A4E57":CAT[e.cat].tint}"></span>`).join("");
+      return `<button class="day${ds===t?" today":""}${ds===S.selDate?" sel":""}${won?" win":""}" data-d="${ds}">
+        <span class="dn">${c.d}</span><span class="dots">${dots}</span>
+      </button>`;
+    }).join("");
+
+    const monthEntries = DB.entries.filter(e=>e.date.startsWith(`${y}-${pad(m+1)}`));
+    const wonN = monthEntries.filter(e=>e.done).length;
+    el.calstat.textContent = monthEntries.length
+      ? `这个月记下 ${monthEntries.length} 件，点亮 ${wonN} 个`
+      : "这个月还空着";
+    renderDayPanel();
+  }
+
+  function renderDayPanel(){
+    const ds = S.selDate;
+    const list = onDate(ds).slice().sort((a,b)=>CATS.findIndex(c=>c.id===a.cat)-CATS.findIndex(c=>c.id===b.cat));
+    const d = parse(ds);
+    let html = `<div class="dp-head">${d.getMonth()+1}月${d.getDate()}日 · 周${WK[d.getDay()]}${list.length?"":" · 空着"}</div>`;
+    if(list.length){
+      let last = null;
+      list.forEach(e=>{
+        if(e.cat!==last){
+          last = e.cat;
+          html += `<div class="dp-cat">${ICON[e.cat]}<span>${CAT[e.cat].name}</span></div>`;
+        }
+        html += `<div class="trow" style="--tint:${CAT[e.cat].tint};--fg:${CAT[e.cat].fg}">
+          <div class="txt"><div class="n">${esc(e.title)}</div>${e.sub?`<div class="s">${esc(e.sub)}</div>`:""}</div>
+          ${e.done&&CAT[e.cat].trophy?`<span class="done-badge">${badgeSvg()}<span>${CAT[e.cat].word}</span></span>`:""}
+        </div>`;
+      });
+    }
+    el.daypanel.innerHTML = html;
+  }
+
+  /* ================= 时间轴 ================= */
+  function renderTimeline(){
+    const groups = {};
+    DB.entries.forEach(e=>{ (groups[e.date]=groups[e.date]||[]).push(e); });
+    const keys = Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+    if(!keys.length){
+      el.lineBody.innerHTML = `<p class="empty">还没有记录。<br>回到「今日」，点一个图标开始。</p>`;
+      return;
+    }
+    el.lineBody.innerHTML = keys.map(k=>{
+      const d = parse(k);
+      const list = groups[k].slice().sort((a,b)=>CATS.findIndex(c=>c.id===a.cat)-CATS.findIndex(c=>c.id===b.cat));
+      return `<div class="tgroup">
+        <div class="tdate"><span class="td-n">${d.getMonth()+1}月${d.getDate()}日</span><span class="td-w">周${WK[d.getDay()]}${k===today()?" · 今天":""}</span></div>
+        ${list.map(e=>`
+          <div class="trow" style="--tint:${CAT[e.cat].tint};--fg:${CAT[e.cat].fg}">
+            <div class="ic">${ICON[e.cat]}</div>
+            <div class="txt"><div class="n">${esc(e.title)}</div>${e.sub?`<div class="s">${esc(e.sub)}</div>`:""}</div>
+            ${e.done&&CAT[e.cat].trophy?`<span class="done-badge">${badgeSvg()}<span>${CAT[e.cat].word}</span></span>`:""}
+          </div>`).join("")}
+      </div>`;
+    }).join("");
+  }
+
+  /* ================= 设置 ================= */
+  const SHAPES = [["cup","奖杯"],["medal","金牌"],["flower","鲜花"]];
+  function renderSet(){
+    el.shapePick.innerHTML = SHAPES.map(([k,n])=>
+      `<button class="sp${DB.trophy===k?" on":""}" data-shape="${k}" aria-label="${n}">
+        <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">${TROPHY_SOLID[k]}</svg>
+      </button>`).join("");
+    el.gameChips.innerHTML = DB.games.map(g=>
+      `<span class="cs">${esc(g)}<button data-rm="${esc(g)}" aria-label="删除">✕</button></span>`).join("");
+  }
+
+  /* ================= 视图 ================= */
+  function setView(v){
+    S.view = v;
+    $("#view-home").hidden = v!=="home";
+    $("#view-cal").hidden = v!=="cal";
+    $("#view-line").hidden = v!=="line";
+    $("#view-set").hidden = v!=="set";
+    [...el.tabs.children].forEach(b=>b.classList.toggle("on", b.dataset.view===v));
+    if(v==="cal"){ renderCal(); }
+    if(v==="line"){ renderTimeline(); }
+    if(v==="set"){ renderSet(); }
+    window.scrollTo({top:0});
+  }
+
+  /* ================= 导出 ================= */
+  function download(name, text, type){
+    const blob = new Blob([text], {type:type||"text/plain;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function csv(){
+    const head = ["日期","星期","分类","名称","详情","完成","完成时间"];
+    const rows = DB.entries.slice().sort((a,b)=>a.date.localeCompare(b.date)||CATS.findIndex(c=>c.id===a.cat)-CATS.findIndex(c=>c.id===b.cat))
+      .map(e=>{
+        const d = parse(e.date);
+        return [e.date, "周"+WK[d.getDay()], CAT[e.cat].name, e.title, e.sub||"",
+          e.done&&CAT[e.cat].trophy?CAT[e.cat].word:"",
+          e.doneAt?new Date(e.doneAt).toLocaleString("zh-CN"):""];
+      });
+    const body = [head,...rows].map(r=>r.map(v=>{
+      const s = String(v??"");
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+    }).join(",")).join("\r\n");
+    return "\uFEFF"+body;
+  }
+
+  /* ================= 事件 ================= */
+  // 首页
+  el.grid.addEventListener("click", ev=>{
+    const b = ev.target.closest(".cell"); if(!b) return;
+    openSheet(b.dataset.cat);
+  });
+  $("#prevDay").onclick = ()=>{ S.date=shift(S.date,-1); renderDate(); renderGrid(); };
+  $("#nextDay").onclick = ()=>{ S.date=shift(S.date,1); renderDate(); renderGrid(); };
+  el.datePick.onchange = ()=>{ if(el.datePick.value){ S.date=el.datePick.value; renderDate(); renderGrid(); } };
+
+  // 抽屉
+  el.scrim.onclick = closeSheet;
+  el.rail.addEventListener("click", ev=>{
+    const b = ev.target.closest(".ro"); if(!b) return;
+    switchCat(b.dataset.cat);
+  });
+  el.twBtn.onclick = ()=>{
+    S.trophyOn = !S.trophyOn;
+    paintTrophy();
+    if(S.trophyOn){
+      el.twBtn.classList.add("pop");
+      if(navigator.vibrate) navigator.vibrate([6,18,8]);
+      setTimeout(()=>el.twBtn.classList.remove("pop"),460);
+    }
+  };
+  el.addBtn.onclick = addEntry;
+  el.againBtn.onclick = ()=>{
+    if(S.cat!=="game") el.titleIn.focus();
+  };
+  el.nextCatBtn.onclick = ()=>{
+    const i = CATS.findIndex(c=>c.id===S.cat);
+    switchCat(CATS[(i+1)%CATS.length].id);
+  };
+  el.rows.addEventListener("click", ev=>{
+    const d = ev.target.closest("[data-del]");
+    if(d){
+      const e = DB.entries.find(x=>x.id===d.dataset.del);
+      if(e && confirm(`删掉「${e.title}」？`)){
+        DB.entries = DB.entries.filter(x=>x.id!==e.id);
+        save(); renderRows(); renderGrid();
+      }
+      return;
+    }
+    const t = ev.target.closest("[data-toggle]");
+    if(t) toggleDone(t.dataset.toggle, t);
+  });
+
+  // 游戏
+  el.gameBox.addEventListener("click", ev=>{
+    const seg = ev.target.closest(".seg");
+    if(seg){
+      S.variant = seg.dataset.variant;
+      [...el.gameBox.querySelectorAll(".seg")].forEach(b=>b.classList.toggle("on", b===seg));
+      renderSheetBody();
+      if(S.variant==="mobile"){ el.titleIn.blur(); }
+      else el.titleIn.focus();
+      return;
+    }
+    const gp = ev.target.closest(".gp");
+    if(gp){
+      if(gp.dataset.g==="__new"){
+        const n = prompt("游戏名字");
+        if(n && n.trim()){
+          const name = n.trim();
+          if(!DB.games.includes(name)) DB.games.push(name);
+          S.game = name; save(); renderSheetBody();
+        }
+        return;
+      }
+      S.game = gp.dataset.g;
+      renderGamePicks();
+      el.subIn.focus();
+    }
+  });
+
+  // 日历
+  $("#calPrev").onclick = ()=>{ S.calM--; if(S.calM<0){S.calM=11;S.calY--;} renderCal(); };
+  $("#calNext").onclick = ()=>{ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} renderCal(); };
+  el.days.addEventListener("click", ev=>{
+    const b = ev.target.closest(".day[data-d]"); if(!b) return;
+    S.selDate = b.dataset.d;
+    [...el.days.children].forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel");
+    renderDayPanel();
+  });
+
+  // 底部标签
+  el.tabs.addEventListener("click", ev=>{
+    const b = ev.target.closest(".tab"); if(!b) return;
+    setView(b.dataset.view);
+  });
+  $("#view-cal").addEventListener("click", ()=>{});
+  $("#view-line").addEventListener("click", ()=>{});
+  $("#view-set").addEventListener("click", ()=>{});
+  document.querySelectorAll(".view").forEach(v=>v.addEventListener("click", ev=>{
+    const b = ev.target.closest("[data-view]"); if(b) setView(b.dataset.view);
+  }));
+
+  // 设置
+  el.shapePick.addEventListener("click", ev=>{
+    const b = ev.target.closest("[data-shape]"); if(!b) return;
+    DB.trophy = b.dataset.shape; save(); renderSet();
+  });
+  el.gameChips.addEventListener("click", ev=>{
+    const b = ev.target.closest("[data-rm]"); if(!b) return;
+    DB.games = DB.games.filter(g=>g!==b.dataset.rm); save(); renderSet();
+  });
+  $("#gameNew").addEventListener("keydown", ev=>{
+    if(ev.key==="Enter"){
+      const v = ev.target.value.trim();
+      if(v && !DB.games.includes(v)){ DB.games.push(v); save(); renderSet(); }
+      ev.target.value = "";
+    }
+  });
+  $("#expJson").onclick = ()=>{
+    download(`日迹备份-${today()}.json`, JSON.stringify({...DB, exportedAt:new Date().toISOString()}, null, 2), "application/json");
+  };
+  $("#expCsv").onclick = ()=>{ download(`日迹-${today()}.csv`, csv(), "text/csv;charset=utf-8"); };
+  $("#impJson").onclick = ()=> $("#fileIn").click();
+  $("#fileIn").onchange = ev=>{
+    const f = ev.target.files[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=>{
+      try{
+        const o = JSON.parse(r.result);
+        if(!Array.isArray(o.entries)) throw new Error("格式不对");
+        if(!confirm(`导入 ${o.entries.length} 条记录？会覆盖当前数据。`)) return;
+        DB.entries = o.entries;
+        if(Array.isArray(o.games)&&o.games.length) DB.games = o.games;
+        if(o.trophy) DB.trophy = o.trophy;
+        save(); renderDate(); renderGrid(); setView("home");
+        alert("已导入");
+      }catch(err){ alert("导入失败："+err.message); }
+    };
+    r.readAsText(f);
+    ev.target.value = "";
+  };
+
+  /* ================= 启动 ================= */
+  load();
+  if(DEMO){
+    const t = today(), y = shift(t,-1);
+    DB.entries = [
+      {id:"a1",date:t,cat:"book",title:"《额尔古纳河右岸》",sub:"迟子建",done:true,doneAt:Date.now()},
+      {id:"a2",date:t,cat:"tv",title:"繁花",sub:"第 12 集 · 腾讯",done:true,doneAt:Date.now()},
+      {id:"a7",date:t,cat:"tv",title:"漫长的季节",sub:"第 3 集",done:false},
+      {id:"a3",date:t,cat:"movie",title:"《周处除三害》",sub:"2023",done:true,doneAt:Date.now()},
+      {id:"a4",date:t,cat:"podcast",title:"忽左忽右",sub:"第 376 期",done:false},
+      {id:"a5",date:t,cat:"game",title:"原神",sub:"新版本主线",variant:"mobile",done:false},
+      {id:"a6",date:y,cat:"social",title:"和小林吃饭",sub:"居酒屋"}
+    ];
+  }
+  renderDate(); renderGrid(); renderSet();
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="sheet"){ setTimeout(()=>openSheet("tv"),100); }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="cal"){ setView("cal"); }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="line"){ setView("line"); }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="set"){ setView("set"); }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="event"){ setTimeout(()=>openSheet("event"),120); }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="full"){
+    setTimeout(()=>{ openSheet("tv"); setTimeout(()=>setFull(true), 480); }, 120);
+  }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="after"){
+    setTimeout(()=>{ openSheet("book"); setTimeout(()=>{
+      el.titleIn.value="克拉拉与太阳"; el.subIn.value="石黑一雄"; addEntry();
+    },420); },120);
+  }
+
+  /* 主字体：本地 ttf（7MB），先让界面出来，字体到位后再切换，避免首屏被拖住 */
+  (function loadJiaYou(){
+    const go = ()=>{
+      if(!document.fonts || !document.fonts.load) return;
+      document.fonts.load('16px "JiaYou"', "日迹读书电影游戏")
+        .then(f=>{ if(f && f.length) document.documentElement.classList.add("wf"); })
+        .catch(()=>{});
+    };
+    if("requestIdleCallback" in window) requestIdleCallback(go, {timeout:900});
+    else setTimeout(go, 260);
+  })();
+
+  /* 离线可用（HTTPS 或 localhost 下才会注册） */
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", ()=>{
+      navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>
