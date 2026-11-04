@@ -1,5 +1,5 @@
 /* 日迹 · service worker */
-const VER = "riji-v7";
+const VER = "riji-v8";
 const SHELL = [
   "./",
   "./index.html",

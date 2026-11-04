@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>日迹</title>
-<meta name="theme-color" content="#F3EFE6">
+<meta name="theme-color" content="#F7F3EA">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="日迹">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -27,6 +29,8 @@
         local("Songti SC"),local("Noto Serif CJK SC"),local("Source Han Serif SC");
   }
   :root{
+    color-scheme:light;
+    color-scheme:only light;   /* 明确拒绝浏览器/系统的强制深色 */
     --paper:#F7F3EA;
     --paper-2:#EFE9DC;
     --paper-rgb:247,243,234;
@@ -42,6 +46,7 @@
   }
   /* 深色模式 */
   :root[data-theme="dark"]{
+    color-scheme:dark;
     --paper:#151318;
     --paper-2:#1E1B22;
     --paper-rgb:21,19,24;
@@ -300,6 +305,8 @@
 
   /* ---------- 日历 ---------- */
   .view[hidden]{display:none}
+  /* 允许纵向滚动，但横向手势交给 JS，避免 pointercancel 把滑动吃掉 */
+  #view-home,#view-cal,#view-line{touch-action:pan-y}
   .calhead{display:flex;align-items:center;justify-content:center;gap:20px;margin:2px 0 22px}
   .calm{font-size:20px;letter-spacing:.14em}
   .calm i{font-style:normal;font-size:13px;color:var(--ink-2);margin-right:4px}
@@ -403,6 +410,11 @@
   .cs button{border:0;background:transparent;color:var(--ink-3);padding:0 2px;font-size:13px;font-family:inherit}
   .note{font-size:11.5px;color:var(--ink-3);line-height:1.9;letter-spacing:.04em}
   .hidden{display:none!important}
+  /* 文件选择框：不能用 display:none，否则手机点了没反应 */
+  .filein{
+    position:absolute;left:-9999px;top:0;width:1px;height:1px;
+    opacity:0;overflow:hidden;pointer-events:none;
+  }
 </style>
 </head>
 <body>
@@ -494,7 +506,7 @@
       <div class="set-row"><div>导出备份<small>换手机、清缓存前导一次</small></div><button class="btn-line" id="expJson">导出</button></div>
       <div class="set-row"><div>导入备份<small>从 .json 恢复</small></div><button class="btn-line" id="impJson">导入</button></div>
       <div class="set-row"><div>导出表格<small>CSV，可导入多维表</small></div><button class="btn-line" id="expCsv">导出</button></div>
-      <input type="file" id="fileIn" accept="application/json,.json" class="hidden">
+      <input type="file" id="fileIn" accept="application/json,.json,text/plain" class="filein">
     </div>
     <div class="set-sec">
       <div class="set-t">说明</div>
@@ -640,6 +652,9 @@
     document.documentElement.setAttribute("data-theme", t);
     const meta = document.querySelector('meta[name="theme-color"]');
     if(meta) meta.setAttribute("content", t==="dark" ? "#151318" : "#F7F3EA");
+    // 同步告诉浏览器当前支持哪套配色，避免系统「强制深色」把它压成深色
+    const cs = document.querySelector('meta[name="color-scheme"]');
+    if(cs) cs.setAttribute("content", t==="dark" ? "dark" : "only light");
     if(el.sheet.classList.contains("on")) paintSheet(CAT[S.cat]);
     if(S.view==="set") renderTheme();
   }
@@ -784,6 +799,7 @@
     el.sdate.textContent = `${d.getMonth()+1}月${d.getDate()}日 · ${label(S.sheetDate)}`;
     el.sheet.classList.remove("full");
     el.sheet.style.height = "";
+    el.sheet.style.transform = "";
     el.sheet.classList.add("on");
     el.scrim.classList.add("on");
     el.scrim.style.opacity = "";
@@ -806,6 +822,7 @@
   function closeSheet(){
     el.sheet.classList.remove("on");
     el.sheet.classList.remove("full");
+    el.sheet.style.transform = "";
     el.scrim.classList.remove("on");
     el.scrim.style.opacity = "";
     document.body.style.overflow = "";
@@ -813,7 +830,7 @@
   }
 
   /* ---------- 抽屉拖拽：半开 ⇄ 铺满，下拖收起 ---------- */
-  const DRAG = { on:false, y0:0, h0:0, dy:0, x0:0, dx:0 };
+  const DRAG = { on:false, y0:0, h0:0, dy:0, x0:0, dx:0, mode:null };
   const fullH = ()=> Math.round(Math.min(window.innerHeight * 0.94, window.innerHeight - 8));
 
   function setFull(on){
@@ -830,6 +847,7 @@
   el.dragzone.addEventListener("pointerdown", e=>{
     if(!el.sheet.classList.contains("on")) return;
     DRAG.on = true;
+    DRAG.mode = null;
     DRAG.y0 = e.clientY;
     DRAG.x0 = e.clientX;
     DRAG.dx = 0;
@@ -844,26 +862,47 @@
     if(!DRAG.on) return;
     DRAG.dy = e.clientY - DRAG.y0;
     DRAG.dx = e.clientX - DRAG.x0;
+    if(!DRAG.mode && (Math.abs(DRAG.dx) > 7 || Math.abs(DRAG.dy) > 7)){
+      DRAG.mode = Math.abs(DRAG.dx) > Math.abs(DRAG.dy) ? "h" : "v";
+    }
+    e.preventDefault();
+    if(DRAG.mode === "h"){
+      // 横向跟手，带一点阻尼，手感更软
+      el.sheet.style.transform = `translateX(${DRAG.dx * 0.72}px)`;
+      el.scrim.style.opacity = String(Math.max(0, 1 - Math.abs(DRAG.dx) / 420));
+      return;
+    }
     let h = DRAG.h0 - DRAG.dy;
     h = Math.max(150, Math.min(fullH(), h));
     el.sheet.style.height = h + "px";
     if(DRAG.dy > 0) el.scrim.style.opacity = String(Math.max(0, 1 - DRAG.dy / 260));
-    e.preventDefault();
   });
 
   function endDrag(){
     if(!DRAG.on) return;
-    const dy = DRAG.dy, dx = DRAG.dx;
+    const dy = DRAG.dy, dx = DRAG.dx, mode = DRAG.mode;
     DRAG.on = false;
     el.sheet.style.transition = "";
     el.scrim.style.opacity = "";
-    // 横向滑动：关掉抽屉并切到日历 / 时间轴
-    if(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.4){
-      const dir = dx < 0 ? "left" : "right";
-      closeSheet(); setFull(false);
-      setTimeout(()=>setView(dir==="left" ? "cal" : "line"), 180);
+
+    if(mode === "h"){
+      if(Math.abs(dx) > 70){
+        const dir = dx < 0 ? "left" : "right";
+        el.sheet.style.transition = "transform .22s ease-out";
+        el.sheet.style.transform = `translateX(${dx < 0 ? "-112%" : "112%"})`;
+        el.scrim.style.opacity = "0";
+        setTimeout(()=>{
+          closeSheet(); setFull(false);
+          el.sheet.style.transform = "";
+          setView(dir === "left" ? "cal" : "line");
+        }, 210);
+      }else{
+        el.sheet.style.transition = "transform .22s var(--ease)";
+        el.sheet.style.transform = "";
+      }
       return;
     }
+
     if(dy > 80){ closeSheet(); return; }
     if(dy < -60){ setFull(true); return; }
     setFull(el.sheet.classList.contains("full"));
@@ -1145,13 +1184,29 @@
   }
 
   /* ================= 导出 ================= */
+  function saveBlob(blob, name){
+    try{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.rel = "noopener";
+      a.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 5000);
+    }catch(e){ alert("导出失败：" + e.message); }
+  }
+  /* 手机上优先用系统分享（PWA 里 a.download 常被忽略），不支持再退回下载 */
   function download(name, text, type){
-    const blob = new Blob([text], {type:type||"text/plain;charset=utf-8"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a); a.click();
-    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    const mime = type || "text/plain;charset=utf-8";
+    const blob = new Blob([text], {type:mime});
+    let file = null;
+    try{ file = new File([blob], name, {type:mime}); }catch(_){}
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file], title:name})
+        .catch(err=>{ if(!err || err.name!=="AbortError") saveBlob(blob, name); });
+      return;
+    }
+    saveBlob(blob, name);
   }
   function csv(){
     const head = ["日期","星期","分类","名称","详情","完成","完成时间"];
@@ -1284,20 +1339,49 @@
 
   /* ---------- 左右滑动 ---------- */
   function addSwipe(node, cb){
-    let x0=0, y0=0, on=false;
-    node.addEventListener("pointerdown", e=>{
-      if(e.pointerType==="mouse" && e.button!==0) return;
-      x0 = e.clientX; y0 = e.clientY; on = true;
-    }, {passive:true});
-    node.addEventListener("pointerup", e=>{
+    let x0=0, y0=0, lx=0, ly=0, on=false, pid=null, viaTouch=false;
+    const start = (x,y)=>{ x0=lx=x; y0=ly=y; on=true; };
+    const move  = (x,y)=>{ if(!on) return; lx=x; ly=y; };
+    const end = ()=>{
       if(!on) return;
       on = false;
-      const dx = e.clientX - x0, dy = e.clientY - y0;
-      if(Math.abs(dx) < 60) return;
-      if(Math.abs(dx) < Math.abs(dy) * 1.6) return;
-      cb(dx < 0 ? "left" : "right");
+      const dx = lx - x0, dy = ly - y0;
+      if(Math.abs(dx) < 50) return;
+      if(Math.abs(dx) < Math.abs(dy) * 1.3) return;
+      cb(dx < 0 ? "left" : "right", dx);
+    };
+    // 触摸（手机）：即使浏览器接管滚动也能收到 touchend
+    node.addEventListener("touchstart", e=>{
+      if(e.touches.length !== 1) return;
+      viaTouch = true;
+      pid = e.touches[0].identifier;
+      start(e.touches[0].clientX, e.touches[0].clientY);
     }, {passive:true});
-    node.addEventListener("pointercancel", ()=>{ on=false; }, {passive:true});
+    node.addEventListener("touchmove", e=>{
+      const t = [...e.touches].find(t=>t.identifier===pid) || e.touches[0];
+      if(t) move(t.clientX, t.clientY);
+    }, {passive:true});
+    node.addEventListener("touchend", e=>{
+      const t = [...e.changedTouches].find(t=>t.identifier===pid) || e.changedTouches[0];
+      if(t) move(t.clientX, t.clientY);
+      end();
+      setTimeout(()=>{ viaTouch = false; }, 400);
+    }, {passive:true});
+    node.addEventListener("touchcancel", ()=>{ end(); setTimeout(()=>{ viaTouch=false; }, 400); }, {passive:true});
+    // 鼠标 / 触控笔（同一次触摸已由上面的分支处理，避免重复触发）
+    node.addEventListener("pointerdown", e=>{
+      if(viaTouch) return;
+      if(e.pointerType === "mouse" && e.button !== 0) return;
+      start(e.clientX, e.clientY);
+    }, {passive:true});
+    node.addEventListener("pointermove", e=>{
+      if(viaTouch) return;
+      move(e.clientX, e.clientY);
+    }, {passive:true});
+    node.addEventListener("pointerup", e=>{
+      if(viaTouch) return;
+      move(e.clientX, e.clientY); end();
+    }, {passive:true});
   }
 
   // 今日：左滑去日历，右滑去时间轴
@@ -1346,22 +1430,29 @@
     download(`日迹备份-${today()}.json`, JSON.stringify({...DB, exportedAt:new Date().toISOString()}, null, 2), "application/json");
   };
   $("#expCsv").onclick = ()=>{ download(`日迹-${today()}.csv`, csv(), "text/csv;charset=utf-8"); };
-  $("#impJson").onclick = ()=> $("#fileIn").click();
+  $("#impJson").onclick = ()=>{
+    const inp = $("#fileIn");
+    try{ inp.click(); }
+    catch(_){ inp.style.pointerEvents = "auto"; inp.style.left = "0"; inp.style.width = "100%"; inp.style.height = "40px"; }
+  };
   $("#fileIn").onchange = ev=>{
-    const f = ev.target.files[0]; if(!f) return;
+    const f = ev.target.files && ev.target.files[0];
+    if(!f) return;
     const r = new FileReader();
     r.onload = ()=>{
       try{
         const o = JSON.parse(r.result);
-        if(!Array.isArray(o.entries)) throw new Error("格式不对");
+        if(!Array.isArray(o.entries)) throw new Error("文件里没有 entries");
         if(!confirm(`导入 ${o.entries.length} 条记录？会覆盖当前数据。`)) return;
         DB.entries = o.entries;
         if(Array.isArray(o.games)&&o.games.length) DB.games = o.games;
         if(o.trophy) DB.trophy = o.trophy;
-        save(); renderDate(); renderGrid(); setView("home");
-        alert("已导入");
-      }catch(err){ alert("导入失败："+err.message); }
+        if(o.theme) DB.theme = o.theme;
+        save(); applyTheme(); renderDate(); renderGrid(); renderSet(); setView("home");
+        alert("已导入 " + DB.entries.length + " 条");
+      }catch(err){ alert("导入失败：" + err.message); }
     };
+    r.onerror = ()=> alert("读不了这个文件");
     r.readAsText(f);
     ev.target.value = "";
   };
