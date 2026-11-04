@@ -40,6 +40,32 @@
     --hand:"Hand",serif;
     --ease:cubic-bezier(.22,1,.36,1);
   }
+  /* 深色模式 */
+  :root[data-theme="dark"]{
+    --paper:#151318;
+    --paper-2:#1E1B22;
+    --paper-rgb:21,19,24;
+    --ink:#F3EDE1;
+    --ink-rgb:243,237,225;
+    --ink-2:#B6ADA0;
+    --ink-3:#7C7468;
+    --line:#3A3532;
+    --gold:#E0A93A;
+    --gold-2:#F5C242;
+  }
+  :root[data-theme="dark"] body::before{mix-blend-mode:screen;opacity:.07}
+  :root[data-theme="dark"] body::after{
+    background:radial-gradient(120% 70% at 50% -10%,rgba(255,238,214,.05),rgba(255,238,214,0) 62%);
+  }
+  :root[data-theme="dark"] .tabs{background:linear-gradient(to top,rgba(var(--paper-rgb),.97) 55%,rgba(var(--paper-rgb),0))}
+  :root[data-theme="dark"] .sheet{box-shadow:0 -10px 40px rgba(0,0,0,.55)}
+  :root[data-theme="dark"] .scrim{background:rgba(0,0,0,.5)}
+  :root[data-theme="dark"] .lb{color:var(--lbd,var(--lbfg,var(--fg)))}
+  :root[data-theme="dark"] .chip{box-shadow:0 2px 0 rgba(0,0,0,.35)}
+  :root[data-theme="dark"] .cell.dk .chip{
+    background:#2E2E38;box-shadow:0 0 0 1px rgba(var(--ink-rgb),.10);
+  }
+  :root[data-theme="dark"] .ro.on{background:rgba(var(--ink-rgb),.18);box-shadow:none}
   /* 字体就绪后启用（7MB，先出界面再换字） */
   html.wf{--hand:"JiaYou","Hand",serif}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -331,6 +357,44 @@
     text-decoration-thickness:1px;text-decoration-color:rgba(var(--ink-rgb),.22);
   }
   .shape-pick{display:flex;gap:16px}
+  /* 外观开关 */
+  .switch{
+    width:46px;height:26px;border-radius:13px;border:0;padding:0;flex:0 0 auto;
+    background:rgba(var(--ink-rgb),.18);position:relative;transition:background .25s var(--ease);
+  }
+  .switch::after{
+    content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;
+    background:var(--paper);box-shadow:0 1px 3px rgba(0,0,0,.28);
+    transition:transform .25s var(--ease);
+  }
+  .switch.on{background:var(--ink)}
+  .switch.on::after{transform:translateX(20px)}
+  .theme-chips{display:flex;gap:8px;padding:12px 0 2px}
+  .tchip{
+    border:1.2px solid rgba(var(--ink-rgb),.18);background:transparent;border-radius:999px;
+    padding:6px 15px;font-family:inherit;font-size:13px;color:var(--ink-2);letter-spacing:.04em;
+  }
+  .tchip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+  /* 时间轴筛选条 */
+  .filterbar{
+    display:flex;gap:8px;overflow-x:auto;margin:0 -24px 16px;padding:2px 24px 4px;
+    scrollbar-width:none;
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 12px,#000 calc(100% - 16px),transparent 100%);
+    mask-image:linear-gradient(to right,transparent 0,#000 12px,#000 calc(100% - 16px),transparent 100%);
+  }
+  .filterbar::-webkit-scrollbar{display:none}
+  .fchip{
+    flex:0 0 auto;display:flex;align-items:center;gap:5px;
+    border:1.2px solid rgba(var(--ink-rgb),.16);background:transparent;color:var(--ink-2);
+    border-radius:999px;padding:6px 12px;font-family:inherit;font-size:12.5px;letter-spacing:.04em;
+  }
+  .fchip svg{width:14px;height:14px}
+  .fchip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .qbtn.danger{color:#C0392B}
+  :root[data-theme="dark"] .qbtn.danger{color:#FF8A73}
+  .trow{cursor:pointer;-webkit-user-select:none;user-select:none}
+  .trow:active{opacity:.6}
   .sp{border:0;background:transparent;padding:4px;color:rgba(var(--ink-rgb),.22);display:grid;place-items:center}
   .sp svg{width:30px;height:30px;filter:url(#wob)}
   .sp.on{color:var(--gold-2)}
@@ -397,10 +461,19 @@
   </main>
 
   <main id="view-line" class="view" hidden>
+    <div class="filterbar" id="filterBar"></div>
     <div id="lineBody"></div>
   </main>
 
   <main id="view-set" class="view" hidden>
+    <div class="set-sec">
+      <div class="set-t">外观</div>
+      <div class="set-row">
+        <div>跟随系统<small>系统切换深色时自动跟随</small></div>
+        <button class="switch" id="themeSwitch" aria-label="跟随系统"></button>
+      </div>
+      <div id="themeBox"></div>
+    </div>
     <div class="set-sec">
       <div class="set-t">完成的记号</div>
       <div class="set-row">
@@ -480,8 +553,10 @@
     </div>
     <div class="quick" id="quick">
       <button class="qbtn" id="againBtn" type="button">＋ 再来一项</button>
-      <span class="qsep">·</span>
+      <span class="qsep" id="sep1">·</span>
       <button class="qbtn" id="nextCatBtn" type="button">换一类 ▸</button>
+      <span class="qsep hidden" id="delSep">·</span>
+      <button class="qbtn danger hidden" id="delBtn" type="button">删除这条</button>
     </div>
 
     <ul class="rows" id="rows"></ul>
@@ -535,7 +610,7 @@
   /* ================= 存储 ================= */
   const KEY = "riji.v1";
   const DEMO = new URLSearchParams(location.search).has("demo");
-  let DB = { entries:[], games:["原神","崩坏：星穹铁道","明日方舟","王者荣耀","蛋仔派对"], trophy:"cup" };
+  let DB = { entries:[], games:["原神","崩坏：星穹铁道","明日方舟","王者荣耀","蛋仔派对"], trophy:"cup", theme:"auto" };
 
   function load(){
     if(DEMO) return;
@@ -546,6 +621,7 @@
         DB.entries = Array.isArray(o.entries)?o.entries:[];
         DB.games = Array.isArray(o.games)&&o.games.length?o.games:DB.games;
         DB.trophy = o.trophy||"cup";
+        DB.theme = o.theme||"auto";
       }
     }catch(e){ console.warn("读取失败",e); }
   }
@@ -553,6 +629,32 @@
     if(DEMO) return;
     try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
     catch(e){ console.warn("保存失败",e); }
+  }
+
+  /* ================= 主题 ================= */
+  const mqDark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  const isDark = ()=> document.documentElement.dataset.theme === "dark";
+
+  function applyTheme(){
+    const t = (DB.theme==="light"||DB.theme==="dark") ? DB.theme : (mqDark && mqDark.matches ? "dark" : "light");
+    document.documentElement.setAttribute("data-theme", t);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if(meta) meta.setAttribute("content", t==="dark" ? "#151318" : "#F7F3EA");
+    if(el.sheet.classList.contains("on")) paintSheet(CAT[S.cat]);
+    if(S.view==="set") renderTheme();
+  }
+  if(mqDark && mqDark.addEventListener){
+    mqDark.addEventListener("change", ()=>{ if(!DB.theme || DB.theme==="auto") applyTheme(); });
+  }
+
+  function renderTheme(){
+    const auto = !DB.theme || DB.theme==="auto";
+    el.themeSwitch.classList.toggle("on", auto);
+    if(auto){ el.themeBox.innerHTML = ""; return; }
+    el.themeBox.innerHTML = `<div class="theme-chips">
+      <button class="tchip${DB.theme==="light"?" on":""}" data-t="light">浅色</button>
+      <button class="tchip${DB.theme==="dark"?" on":""}" data-t="dark">深色</button>
+    </div>`;
   }
 
   /* ================= 日期工具 ================= */
@@ -579,6 +681,8 @@
     variant: "solo",
     game: null,
     trophyOn: false,
+    editing: null,
+    filter: "all",
     calY: new Date().getFullYear(),
     calM: new Date().getMonth(),
     selDate: today()
@@ -594,6 +698,8 @@
     twBtn:$("#twBtn"), twIcon:$("#twIcon"), twLabel:$("#twLabel"), titleField:$("#titleField"),
     gameBox:$("#gameBox"), gamesWrap:$("#gamesWrap"), gamePicks:$("#gamePicks"),
     calm:$("#calm"), dowgrid:$("#dowgrid"), days:$("#days"), calstat:$("#calstat"), daypanel:$("#daypanel"),
+    filterBar:$("#filterBar"), themeSwitch:$("#themeSwitch"), themeBox:$("#themeBox"),
+    delBtn:$("#delBtn"), delSep:$("#delSep"), sep1:$("#sep1"),
     lineBody:$("#lineBody"), shapePick:$("#shapePick"), gameChips:$("#gameChips"),
     tabs:$("#tabs")
   };
@@ -610,7 +716,7 @@
     const list = onDate(S.date);
     el.grid.innerHTML = CATS.map((c,i)=>{
       const n = list.filter(e=>e.cat===c.id).length;
-      return `<button class="cell${c.dark?" dk":""}" data-cat="${c.id}" style="--i:${i};--tint:${c.tint};--fg:${c.fg};--lbfg:${c.dark?"var(--ink)":c.fg};--rot:${[-1.6,-0.9,1.4,1.1,-1.3,0.8,-1.1,1.5,-0.7][i]}deg">
+      return `<button class="cell${c.dark?" dk":""}" data-cat="${c.id}" style="--i:${i};--tint:${c.tint};--fg:${c.fg};--lbfg:${c.dark?"var(--ink)":c.fg};--lbd:${c.dark?"var(--ink)":c.tint};--rot:${[-1.6,-0.9,1.4,1.1,-1.3,0.8,-1.1,1.5,-0.7][i]}deg">
         <span class="chip">${ICON[c.id]}</span>
         <span class="lb">${c.name}</span>
         ${n?`<span class="cnt">${n}</span>`:""}
@@ -631,31 +737,71 @@
     return `${(n>>16)&255},${(n>>8)&255},${n&255}`;
   }
   function paintSheet(c){
-    const rgb = hexRGB(c.fg), s = el.sheet.style;
-    s.setProperty("--tint", c.soft);
-    s.setProperty("--ink", c.fg);
+    const dark = isDark();
+    const s = el.sheet.style;
+    let bg, ink;
+    if(dark){
+      bg = c.dark ? "#26252B" : mixHex(c.soft, "#141217", 0.80);
+      ink = c.dark ? c.fg : c.tint;
+    }else{
+      bg = c.soft;
+      ink = c.fg;
+    }
+    const rgb = hexRGB(ink);
+    s.setProperty("--tint", bg);
+    s.setProperty("--ink", ink);
     s.setProperty("--ink-rgb", rgb);
     s.setProperty("--ink-2", `rgba(${rgb},.74)`);
-    s.setProperty("--ink-3", `rgba(${rgb},.48)`);
-    s.setProperty("--line", `rgba(${rgb},.20)`);
+    s.setProperty("--ink-3", `rgba(${rgb},.46)`);
+    s.setProperty("--line", `rgba(${rgb},.22)`);
   }
-  function openSheet(cat){
+  function mixHex(a, b, t){
+    const pa = parseInt(a.slice(1),16), pb = parseInt(b.slice(1),16);
+    const ch = (sh)=> Math.round((((pa>>sh)&255)*(1-t)) + (((pb>>sh)&255)*t));
+    return "#" + [16,8,0].map(sh=>ch(sh).toString(16).padStart(2,"0")).join("");
+  }
+
+  function toggleEditChrome(editing){
+    el.againBtn.classList.toggle("hidden", editing);
+    el.sep1.classList.toggle("hidden", editing);
+    el.nextCatBtn.classList.toggle("hidden", editing);
+    el.delBtn.classList.toggle("hidden", !editing);
+    el.delSep.classList.add("hidden");
+  }
+
+  function openSheet(cat, editId){
+    const e = editId ? DB.entries.find(x=>x.id===editId) : null;
+    S.editing = e ? e.id : null;
     S.cat = cat;
-    S.variant = "solo";
-    S.game = null;
-    S.trophyOn = false;
+    S.sheetDate = e ? e.date : S.date;
+    S.variant = (e && e.variant) ? e.variant : "solo";
+    S.game = (e && cat==="game" && S.variant==="mobile") ? e.title : null;
+    S.trophyOn = e ? !!e.done : false;
+
     paintSheet(CAT[cat]);
     el.sname.textContent = CAT[cat].name;
-    el.sdate.textContent = `${parse(S.date).getMonth()+1}月${parse(S.date).getDate()}日 · ${label(S.date)}`;
+    const d = parse(S.sheetDate);
+    el.sdate.textContent = `${d.getMonth()+1}月${d.getDate()}日 · ${label(S.sheetDate)}`;
     el.sheet.classList.remove("full");
     el.sheet.style.height = "";
     el.sheet.classList.add("on");
     el.scrim.classList.add("on");
     el.scrim.style.opacity = "";
     document.body.style.overflow = "hidden";
+
     renderRail(); renderSheetBody(); renderRows();
-    el.addBtn.textContent = "记下";
-    setTimeout(()=>{ if(cat!=="game") el.titleIn.focus(); },340);
+
+    if(e){
+      el.titleIn.value = e.title || "";
+      el.subIn.value = e.sub || "";
+      el.addBtn.textContent = "保存";
+    }else{
+      el.titleIn.value = ""; el.subIn.value = "";
+      el.addBtn.textContent = "记下";
+    }
+    paintTrophy();
+    toggleEditChrome(!!e);
+    setTimeout(()=>{ if(cat!=="game" && !e) el.titleIn.focus(); },340);
   }
   function closeSheet(){
     el.sheet.classList.remove("on");
@@ -667,7 +813,7 @@
   }
 
   /* ---------- 抽屉拖拽：半开 ⇄ 铺满，下拖收起 ---------- */
-  const DRAG = { on:false, y0:0, h0:0, dy:0 };
+  const DRAG = { on:false, y0:0, h0:0, dy:0, x0:0, dx:0 };
   const fullH = ()=> Math.round(Math.min(window.innerHeight * 0.94, window.innerHeight - 8));
 
   function setFull(on){
@@ -685,6 +831,8 @@
     if(!el.sheet.classList.contains("on")) return;
     DRAG.on = true;
     DRAG.y0 = e.clientY;
+    DRAG.x0 = e.clientX;
+    DRAG.dx = 0;
     DRAG.h0 = el.sheet.getBoundingClientRect().height;
     DRAG.dy = 0;
     el.sheet.style.transition = "none";
@@ -695,6 +843,7 @@
   el.dragzone.addEventListener("pointermove", e=>{
     if(!DRAG.on) return;
     DRAG.dy = e.clientY - DRAG.y0;
+    DRAG.dx = e.clientX - DRAG.x0;
     let h = DRAG.h0 - DRAG.dy;
     h = Math.max(150, Math.min(fullH(), h));
     el.sheet.style.height = h + "px";
@@ -704,10 +853,17 @@
 
   function endDrag(){
     if(!DRAG.on) return;
-    const dy = DRAG.dy;
+    const dy = DRAG.dy, dx = DRAG.dx;
     DRAG.on = false;
     el.sheet.style.transition = "";
     el.scrim.style.opacity = "";
+    // 横向滑动：关掉抽屉并切到日历 / 时间轴
+    if(Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.4){
+      const dir = dx < 0 ? "left" : "right";
+      closeSheet(); setFull(false);
+      setTimeout(()=>setView(dir==="left" ? "cal" : "line"), 180);
+      return;
+    }
     if(dy > 80){ closeSheet(); return; }
     if(dy < -60){ setFull(true); return; }
     setFull(el.sheet.classList.contains("full"));
@@ -758,7 +914,7 @@
   }
 
   function renderRows(){
-    const list = onDate(S.date).filter(e=>e.cat===S.cat);
+    const list = onDate(S.sheetDate || S.date).filter(e=>e.cat===S.cat);
     if(!list.length){
       el.rows.innerHTML = `<li class="empty">这天空着</li>`;
       return;
@@ -779,7 +935,13 @@
   const badgeSvg = ()=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${TROPHY_SOLID[DB.trophy]||TROPHY_SOLID.cup}</svg>`;
   const esc = s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 
-  /* ================= 新增 ================= */
+  /* ================= 新增 / 保存 ================= */
+  function refreshAll(){
+    renderGrid();
+    if(S.view==="cal") renderCal();
+    if(S.view==="line") renderTimeline();
+  }
+
   function addEntry(){
     const c = CAT[S.cat];
     let title = el.titleIn.value.trim();
@@ -791,8 +953,20 @@
     }
     if(!title){ el.titleIn.focus(); return; }
     const done = S.trophyOn && c.trophy && !(c.id==="game" && S.variant==="mobile");
+
+    if(S.editing){
+      const e = DB.entries.find(x=>x.id===S.editing);
+      if(e){
+        e.title = title; e.sub = sub; e.done = done;
+        e.doneAt = done ? (e.doneAt || Date.now()) : null;
+        if(c.id==="game") e.variant = S.variant;
+        save(); closeSheet(); refreshAll();
+      }
+      return;
+    }
+
     DB.entries.push({
-      id: uid(), date: S.date, cat: c.id, title, sub,
+      id: uid(), date: S.sheetDate || S.date, cat: c.id, title, sub,
       variant: c.id==="game"?S.variant:null,
       done, doneAt: done?Date.now():null
     });
@@ -805,6 +979,15 @@
     el.addBtn.textContent = "记下";
     if(!(c.id==="game" && S.variant==="mobile")) el.titleIn.focus();
     if(navigator.vibrate) navigator.vibrate(8);
+  }
+
+  function deleteEntry(id){
+    const e = DB.entries.find(x=>x.id===id);
+    if(!e) return;
+    if(!confirm(`删掉「${e.title}」？`)) return;
+    DB.entries = DB.entries.filter(x=>x.id!==id);
+    save(); closeSheet(); refreshAll();
+    renderRows();
   }
 
   function flash(node){
@@ -832,6 +1015,9 @@
     S.variant = "solo";
     S.game = null;
     S.trophyOn = false;
+    S.editing = null;
+    el.addBtn.textContent = "记下";
+    toggleEditChrome(false);
     paintSheet(CAT[cat]);
     el.sname.textContent = CAT[cat].name;
     el.titleIn.value = ""; el.subIn.value = "";
@@ -888,7 +1074,7 @@
           last = e.cat;
           html += `<div class="dp-cat">${ICON[e.cat]}<span>${CAT[e.cat].name}</span></div>`;
         }
-        html += `<div class="trow" style="--tint:${CAT[e.cat].tint};--fg:${CAT[e.cat].fg}">
+        html += `<div class="trow" data-eid="${e.id}" style="--tint:${CAT[e.cat].tint};--fg:${CAT[e.cat].fg}">
           <div class="txt"><div class="n">${esc(e.title)}</div>${e.sub?`<div class="s">${esc(e.sub)}</div>`:""}</div>
           ${e.done&&CAT[e.cat].trophy?`<span class="done-badge">${badgeSvg()}<span>${CAT[e.cat].word}</span></span>`:""}
         </div>`;
@@ -898,12 +1084,23 @@
   }
 
   /* ================= 时间轴 ================= */
+  function renderFilter(){
+    const opts = [{id:"all", name:"全部"}].concat(CATS.map(c=>({id:c.id, name:c.name})));
+    el.filterBar.innerHTML = opts.map(o=>{
+      const on = S.filter===o.id;
+      const icon = o.id==="all" ? "" : ICON[o.id];
+      return `<button class="fchip${on?" on":""}" data-f="${o.id}">${icon}<span>${o.name}</span></button>`;
+    }).join("");
+  }
+
   function renderTimeline(){
+    renderFilter();
+    const src = S.filter==="all" ? DB.entries : DB.entries.filter(e=>e.cat===S.filter);
     const groups = {};
-    DB.entries.forEach(e=>{ (groups[e.date]=groups[e.date]||[]).push(e); });
+    src.forEach(e=>{ (groups[e.date]=groups[e.date]||[]).push(e); });
     const keys = Object.keys(groups).sort((a,b)=>b.localeCompare(a));
     if(!keys.length){
-      el.lineBody.innerHTML = `<p class="empty">还没有记录。<br>回到「今日」，点一个图标开始。</p>`;
+      el.lineBody.innerHTML = `<p class="empty">${S.filter==="all" ? "还没有记录。<br>回到「今日」，点一个图标开始。" : "这一类还没有记录。"}</p>`;
       return;
     }
     el.lineBody.innerHTML = keys.map(k=>{
@@ -912,7 +1109,7 @@
       return `<div class="tgroup">
         <div class="tdate"><span class="td-n">${d.getMonth()+1}月${d.getDate()}日</span><span class="td-w">周${WK[d.getDay()]}${k===today()?" · 今天":""}</span></div>
         ${list.map(e=>`
-          <div class="trow" style="--tint:${CAT[e.cat].tint};--fg:${CAT[e.cat].fg}">
+          <div class="trow" data-eid="${e.id}" style="--tint:${CAT[e.cat].tint};--fg:${CAT[e.cat].fg}">
             <div class="ic">${ICON[e.cat]}</div>
             <div class="txt"><div class="n">${esc(e.title)}</div>${e.sub?`<div class="s">${esc(e.sub)}</div>`:""}</div>
             ${e.done&&CAT[e.cat].trophy?`<span class="done-badge">${badgeSvg()}<span>${CAT[e.cat].word}</span></span>`:""}
@@ -924,6 +1121,7 @@
   /* ================= 设置 ================= */
   const SHAPES = [["cup","奖杯"],["medal","金牌"],["flower","鲜花"]];
   function renderSet(){
+    renderTheme();
     el.shapePick.innerHTML = SHAPES.map(([k,n])=>
       `<button class="sp${DB.trophy===k?" on":""}" data-shape="${k}" aria-label="${n}">
         <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">${TROPHY_SOLID[k]}</svg>
@@ -1004,6 +1202,24 @@
     const i = CATS.findIndex(c=>c.id===S.cat);
     switchCat(CATS[(i+1)%CATS.length].id);
   };
+  el.delBtn.onclick = ()=>{ if(S.editing) deleteEntry(S.editing); };
+  el.themeSwitch.onclick = ()=>{
+    if(!DB.theme || DB.theme==="auto"){
+      DB.theme = isDark() ? "dark" : "light";   // 关掉跟随：先固定为当前观感
+    }else{
+      DB.theme = "auto";
+    }
+    save(); applyTheme(); renderTheme();
+  };
+  el.themeBox.addEventListener("click", ev=>{
+    const b = ev.target.closest("[data-t]"); if(!b) return;
+    DB.theme = b.dataset.t; save(); applyTheme(); renderTheme();
+  });
+  el.filterBar.addEventListener("click", ev=>{
+    const b = ev.target.closest("[data-f]"); if(!b) return;
+    S.filter = b.dataset.f;
+    renderTimeline();
+  });
   el.rows.addEventListener("click", ev=>{
     const d = ev.target.closest("[data-del]");
     if(d){
@@ -1056,6 +1272,47 @@
     b.classList.add("sel");
     renderDayPanel();
   });
+
+  // 点条目 → 编辑
+  const editFrom = ev=>{
+    const r = ev.target.closest("[data-eid]"); if(!r) return;
+    const e = DB.entries.find(x=>x.id===r.dataset.eid);
+    if(e) openSheet(e.cat, e.id);
+  };
+  el.daypanel.addEventListener("click", editFrom);
+  el.lineBody.addEventListener("click", editFrom);
+
+  /* ---------- 左右滑动 ---------- */
+  function addSwipe(node, cb){
+    let x0=0, y0=0, on=false;
+    node.addEventListener("pointerdown", e=>{
+      if(e.pointerType==="mouse" && e.button!==0) return;
+      x0 = e.clientX; y0 = e.clientY; on = true;
+    }, {passive:true});
+    node.addEventListener("pointerup", e=>{
+      if(!on) return;
+      on = false;
+      const dx = e.clientX - x0, dy = e.clientY - y0;
+      if(Math.abs(dx) < 60) return;
+      if(Math.abs(dx) < Math.abs(dy) * 1.6) return;
+      cb(dx < 0 ? "left" : "right");
+    }, {passive:true});
+    node.addEventListener("pointercancel", ()=>{ on=false; }, {passive:true});
+  }
+
+  // 今日：左滑去日历，右滑去时间轴
+  addSwipe($("#view-home"), dir=>{
+    if(dir==="left") setView("cal");
+    else setView("line");
+  });
+  // 日历：左滑下一月，右滑上一月
+  addSwipe($("#view-cal"), dir=>{
+    if(dir==="left"){ S.calM++; if(S.calM>11){S.calM=0;S.calY++;} }
+    else { S.calM--; if(S.calM<0){S.calM=11;S.calY--;} }
+    renderCal();
+  });
+  // 时间轴：右滑回今日
+  addSwipe($("#view-line"), dir=>{ if(dir==="right") setView("home"); });
 
   // 底部标签
   el.tabs.addEventListener("click", ev=>{
@@ -1123,6 +1380,8 @@
       {id:"a6",date:y,cat:"social",title:"和小林吃饭",sub:"居酒屋"}
     ];
   }
+  if(DEMO && new URLSearchParams(location.search).get("dark")){ DB.theme = "dark"; }
+  applyTheme();
   renderDate(); renderGrid(); renderSet();
   if(DEMO && new URLSearchParams(location.search).get("demo")==="sheet"){ setTimeout(()=>openSheet("tv"),100); }
   if(DEMO && new URLSearchParams(location.search).get("demo")==="cal"){ setView("cal"); }
@@ -1131,6 +1390,9 @@
   if(DEMO && new URLSearchParams(location.search).get("demo")==="event"){ setTimeout(()=>openSheet("event"),120); }
   if(DEMO && new URLSearchParams(location.search).get("demo")==="full"){
     setTimeout(()=>{ openSheet("tv"); setTimeout(()=>setFull(true), 480); }, 120);
+  }
+  if(DEMO && new URLSearchParams(location.search).get("demo")==="edit"){
+    setTimeout(()=>{ const e=DB.entries[0]; if(e) openSheet(e.cat, e.id); }, 120);
   }
   if(DEMO && new URLSearchParams(location.search).get("demo")==="after"){
     setTimeout(()=>{ openSheet("book"); setTimeout(()=>{
